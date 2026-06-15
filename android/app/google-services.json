@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "117321124521",
+    "project_id": "molly-expenses",
+    "storage_bucket": "molly-expenses.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:117321124521:android:9c6df914f9c0c1127177b8",
+        "android_client_info": {
+          "package_name": "com.mollyexpenses.molly_expenses"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBypDbBGhCCIntVerARZyUPgnku0Y3ZDc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

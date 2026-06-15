@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAccountMember(accountId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/accounts/$(accountId)/members/$(request.auth.uid));
+    }
+
+    function isAccountOwner(accountId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/accounts/$(accountId)/members/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId
+                    && request.resource.data.uid == userId
+                    && request.resource.data.email == request.auth.token.email;
+      allow update: if isSignedIn() && request.auth.uid == userId
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.email == resource.data.email;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isAccountMember(accountId);
+      allow create: if isSignedIn()
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isAccountOwner(accountId);
+      allow delete: if isAccountOwner(accountId);
+
+      match /members/{userId} {
+        allow read: if isAccountMember(accountId);
+        allow create: if isAccountOwner(accountId) ||
+          (isSignedIn() && userId == request.auth.uid &&
+           request.resource.data.role == 'assistant') ||
+          (isSignedIn() && userId == request.auth.uid &&
+           request.resource.data.role == 'owner' &&
+           (!exists(/databases/$(database)/documents/accounts/$(accountId)) ||
+            get(/databases/$(database)/documents/accounts/$(accountId)).data.ownerId == request.auth.uid));
+        allow update, delete: if isAccountOwner(accountId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if isAccountMember(accountId) &&
+          (isAccountOwner(accountId) || resource.data.registeredBy == request.auth.uid);
+        allow create: if isAccountMember(accountId) &&
+          request.resource.data.registeredBy == request.auth.uid;
+        allow update, delete: if isAccountOwner(accountId) ||
+          resource.data.registeredBy == request.auth.uid;
+      }
+    }
+
+    match /inviteCodes/{code} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        isAccountOwner(request.resource.data.accountId);
+      allow delete: if isSignedIn() &&
+        isAccountOwner(resource.data.accountId);
+      allow update: if isSignedIn() && (
+        isAccountOwner(resource.data.accountId) ||
+        (resource.data.used == false &&
+         request.resource.data.used == true &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used']))
+      );
+    }
+  }
+}
