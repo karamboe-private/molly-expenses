@@ -2,7 +2,7 @@ name: molly_expenses
 description: "Track Molly's expenses with receipt scanning and Firebase backend."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.10.8
