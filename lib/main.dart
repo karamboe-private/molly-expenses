@@ -11,6 +11,7 @@ import 'providers/expense_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/logger_service.dart';
+import 'widgets/biometric_lock_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,8 +41,33 @@ void main() async {
   );
 }
 
-class MollyExpensesApp extends StatelessWidget {
+class MollyExpensesApp extends StatefulWidget {
   const MollyExpensesApp({super.key});
+
+  @override
+  State<MollyExpensesApp> createState() => _MollyExpensesAppState();
+}
+
+class _MollyExpensesAppState extends State<MollyExpensesApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      context.read<AuthProvider>().lockApp();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,10 +77,13 @@ class MollyExpensesApp extends StatelessWidget {
       theme: AppTheme.darkTheme,
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
-          if (authProvider.isAuthenticated) {
-            return const HomeScreen();
+          if (!authProvider.isAuthenticated) {
+            return const LoginScreen();
           }
-          return const LoginScreen();
+          if (authProvider.requiresBiometricUnlock) {
+            return const BiometricLockScreen();
+          }
+          return const HomeScreen();
         },
       ),
       onGenerateRoute: AppRoutes.generateRoute,

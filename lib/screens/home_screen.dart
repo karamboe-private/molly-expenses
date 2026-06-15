@@ -91,36 +91,41 @@ class _HomeScreenState extends State<HomeScreen> {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'This month',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Colors.white70,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          currencyFormat.format(expenses.totalAmount),
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.secondary,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${expenses.expenses.length} expense${expenses.expenses.length == 1 ? '' : 's'}',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.white54,
-                              ),
-                        ),
-                      ],
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _DashboardAmount(
+                        label: 'Today',
+                        amount: currencyFormat.format(expenses.todayTotal),
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DashboardAmount(
+                        label: 'This week',
+                        amount: currencyFormat.format(expenses.weekTotal),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DashboardAmount(
+                        label: 'This month',
+                        amount: currencyFormat.format(expenses.monthTotal),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${expenses.monthExpenses.length} expense${expenses.monthExpenses.length == 1 ? '' : 's'} this month',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white54,
+                        ),
                   ),
                 ),
               ),
@@ -145,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: expenses.expenses.isEmpty
+                child: expenses.monthExpenses.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -169,9 +174,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
-                        itemCount: expenses.expenses.length,
+                        itemCount: expenses.monthExpenses.length,
                         itemBuilder: (context, index) {
-                          final expense = expenses.expenses[index];
+                          final expense = expenses.monthExpenses[index];
                           return ExpenseListTile(
                             expense: expense,
                             onTap: () {
@@ -241,6 +246,48 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(content: Text(expenseProvider.errorMessage!)),
       );
     }
+  }
+}
+
+class _DashboardAmount extends StatelessWidget {
+  final String label;
+  final String amount;
+
+  const _DashboardAmount({
+    required this.label,
+    required this.amount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final amountStyle = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.secondary,
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(amount, style: amountStyle),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

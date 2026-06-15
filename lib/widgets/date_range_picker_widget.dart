@@ -50,33 +50,41 @@ class DateRangePickerWidget extends StatelessWidget {
       children: [
         InkWell(
           onTap: () => _pickRange(context),
+          borderRadius: BorderRadius.circular(12),
           child: InputDecorator(
             decoration: const InputDecoration(
               labelText: 'Date range',
               prefixIcon: Icon(Icons.date_range),
+              contentPadding: EdgeInsets.fromLTRB(12, 16, 12, 14),
             ),
-            child: Text('${format.format(startDate)} – ${format.format(endDate)}'),
+            child: Text(
+              '${format.format(startDate)} – ${format.format(endDate)}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ),
         ),
         const SizedBox(height: 8),
         Wrap(
-          spacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: [
-            ActionChip(
-              label: const Text('This month'),
-              onPressed: () => _setPreset('this_month'),
-            ),
-            ActionChip(
-              label: const Text('Last month'),
-              onPressed: () => _setPreset('last_month'),
-            ),
-            ActionChip(
-              label: const Text('This year'),
-              onPressed: () => _setPreset('this_year'),
-            ),
+            _presetChip(context, 'This month', 'this_month'),
+            _presetChip(context, 'Last month', 'last_month'),
+            _presetChip(context, 'This year', 'this_year'),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _presetChip(BuildContext context, String label, String preset) {
+    return ActionChip(
+      label: Text(label),
+      labelStyle: Theme.of(context).textTheme.labelSmall,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      onPressed: () => _setPreset(preset),
     );
   }
 }

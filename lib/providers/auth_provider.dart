@@ -3,10 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_profile.dart';
 import '../models/account.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_auth_service.dart';
 import '../services/logger_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
+  final BiometricAuthService _biometricAuthService = BiometricAuthService();
 
   User? _user;
   UserProfile? _userProfile;
@@ -14,6 +16,11 @@ class AuthProvider extends ChangeNotifier {
   List<AccountMember> _members = [];
   bool _isLoading = false;
   String? _errorMessage;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
+  bool _hasStoredBiometricCredentials = false;
+  bool _biometricUnlocked = true;
+  String _biometricLabel = 'Biometrics';
 
   User? get user => _user;
   UserProfile? get userProfile => _userProfile;
@@ -24,19 +31,173 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _user != null;
   bool get isOwner => _userProfile?.isOwner ?? false;
   String? get accountId => _userProfile?.accountId;
+  bool get biometricAvailable => _biometricAvailable;
+  bool get biometricLoginEnabled => _biometricEnabled;
+  bool get hasStoredBiometricCredentials => _hasStoredBiometricCredentials;
+  bool get requiresBiometricUnlock =>
+      isAuthenticated && _biometricEnabled && !_biometricUnlocked;
+  String get biometricLabel => _biometricLabel;
 
   AuthProvider() {
+    _loadBiometricState();
     _authService.authStateChanges.listen((user) async {
       _user = user;
       if (user != null) {
         await loadUserProfile();
+        await _applyBiometricLockIfNeeded();
       } else {
         _userProfile = null;
         _account = null;
         _members = [];
+        _biometricUnlocked = true;
       }
       notifyListeners();
     });
+  }
+
+  Future<void> _loadBiometricState() async {
+    _biometricAvailable = await _biometricAuthService.isAvailable();
+    _biometricEnabled = await _biometricAuthService.isEnabled();
+    _hasStoredBiometricCredentials =
+        await _biometricAuthService.hasStoredCredentials();
+    if (_biometricAvailable) {
+      _biometricLabel = await _biometricAuthService.biometricLabel();
+    }
+    notifyListeners();
+  }
+
+  Future<void> refreshBiometricState() => _loadBiometricState();
+
+  Future<void> _applyBiometricLockIfNeeded() async {
+    if (_biometricEnabled) {
+      _biometricUnlocked = false;
+    }
+  }
+
+  void lockApp() {
+    if (_biometricEnabled && isAuthenticated) {
+      _biometricUnlocked = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> unlockWithBiometrics() async {
+    if (!_biometricAvailable || !_biometricEnabled) {
+      _biometricUnlocked = true;
+      notifyListeners();
+      return true;
+    }
+
+    _errorMessage = null;
+    final success = await _biometricAuthService.authenticate(
+      reason: 'Unlock Molly Expenses',
+    );
+
+    if (success) {
+      _biometricUnlocked = true;
+      notifyListeners();
+      return true;
+    }
+
+    _errorMessage = '$_biometricLabel authentication failed';
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> signInWithBiometrics() async {
+    if (!_biometricAvailable || !_hasStoredBiometricCredentials) {
+      _errorMessage = '$_biometricLabel sign-in is not set up';
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final authenticated = await _biometricAuthService.authenticate(
+        reason: 'Sign in to Molly Expenses',
+      );
+      if (!authenticated) {
+        _isLoading = false;
+        _errorMessage = '$_biometricLabel authentication cancelled';
+        notifyListeners();
+        return false;
+      }
+
+      final credentials = await _biometricAuthService.readCredentials();
+      if (credentials == null) {
+        _isLoading = false;
+        _errorMessage = 'Saved sign-in details not found';
+        notifyListeners();
+        return false;
+      }
+
+      final user = await _authService.signInWithEmailPassword(
+        credentials.email,
+        credentials.password,
+      );
+
+      _isLoading = false;
+      if (user != null) {
+        _user = user;
+        _biometricUnlocked = true;
+        await loadUserProfile();
+        notifyListeners();
+        return true;
+      }
+
+      _errorMessage = 'Sign in failed';
+      notifyListeners();
+      return false;
+    } on FirebaseAuthException catch (e) {
+      _isLoading = false;
+      _errorMessage = _getErrorMessage(e.code);
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'An unexpected error occurred';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> enableBiometricLogin({
+    required String email,
+    required String password,
+  }) async {
+    if (!_biometricAvailable) return false;
+
+    await _biometricAuthService.saveCredentials(
+      email: email,
+      password: password,
+    );
+    await _loadBiometricState();
+    _biometricUnlocked = true;
+    return true;
+  }
+
+  Future<bool> enableBiometricAppLock() async {
+    if (!_biometricAvailable) return false;
+
+    final authenticated = await _biometricAuthService.authenticate(
+      reason: 'Enable $_biometricLabel for Molly Expenses',
+    );
+    if (!authenticated) return false;
+
+    await _biometricAuthService.enableAppLockOnly();
+    await _loadBiometricState();
+    _biometricUnlocked = true;
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> disableBiometricLogin() async {
+    await _biometricAuthService.disable();
+    _biometricUnlocked = true;
+    await _loadBiometricState();
   }
 
   Future<void> loadUserProfile() async {
@@ -206,6 +367,7 @@ class AuthProvider extends ChangeNotifier {
     _account = null;
     _members = [];
     _errorMessage = null;
+    _biometricUnlocked = true;
     notifyListeners();
   }
 

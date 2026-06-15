@@ -37,6 +37,21 @@ class ExpenseProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   double get totalAmount => _expenseService.calculateTotal(_expenses);
+
+  double get todayTotal => _sumForDateRange(_startOfToday(), _startOfToday());
+
+  double get weekTotal =>
+      _sumForDateRange(_startOfWeek(DateTime.now()), _startOfToday());
+
+  double get monthTotal => _sumForDateRange(_startOfMonth(), _startOfToday());
+
+  List<Expense> get monthExpenses {
+    final monthStart = _startOfMonth();
+    return _expenses
+        .where((e) => !_dateOnly(e.expenseDate).isBefore(monthStart))
+        .toList();
+  }
+
   Map<String, double> get categoryTotals =>
       _expenseService.totalsByCategory(_expenses);
   Map<String, double> get registeredByTotals =>
@@ -89,11 +104,15 @@ class ExpenseProvider extends ChangeNotifier {
     String? userId,
   }) {
     final now = DateTime.now();
+    final monthStart = _startOfMonth(now);
+    final weekStart = _startOfWeek(now);
+    final startDate = weekStart.isBefore(monthStart) ? weekStart : monthStart;
+
     subscribe(
       accountId: accountId,
       isOwner: isOwner,
       userId: userId,
-      startDate: DateTime(now.year, now.month, 1),
+      startDate: startDate,
       endDate: DateTime(now.year, now.month, now.day, 23, 59, 59),
     );
   }
@@ -336,6 +355,31 @@ class ExpenseProvider extends ChangeNotifier {
 
   DateTime _dateOnly(DateTime date) =>
       DateTime(date.year, date.month, date.day);
+
+  DateTime _startOfToday([DateTime? reference]) {
+    final now = reference ?? DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  DateTime _startOfMonth([DateTime? reference]) {
+    final now = reference ?? DateTime.now();
+    return DateTime(now.year, now.month, 1);
+  }
+
+  DateTime _startOfWeek(DateTime date) {
+    final day = _dateOnly(date);
+    return day.subtract(Duration(days: day.weekday - DateTime.monday));
+  }
+
+  double _sumForDateRange(DateTime start, DateTime end) {
+    final rangeStart = _dateOnly(start);
+    final rangeEnd = _dateOnly(end);
+    final filtered = _expenses.where((expense) {
+      final expenseDay = _dateOnly(expense.expenseDate);
+      return !expenseDay.isBefore(rangeStart) && !expenseDay.isAfter(rangeEnd);
+    });
+    return _expenseService.calculateTotal(filtered.toList());
+  }
 
   void _upsertExpense(Expense expense) {
     _expenses.removeWhere((existing) => existing.id == expense.id);

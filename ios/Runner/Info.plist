@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to sign in and unlock Molly Expenses</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos of receipts for expense tracking</string>
 	<key>NSPhotoLibraryUsageDescription</key>

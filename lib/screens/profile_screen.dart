@@ -20,6 +20,80 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _toggleBiometricLogin(AuthProvider auth, bool enabled) async {
+    if (enabled) {
+      if (auth.hasStoredBiometricCredentials) {
+        await auth.refreshBiometricState();
+        return;
+      }
+
+      final password = await _promptForPassword(auth.biometricLabel);
+      if (!mounted || password == null) return;
+
+      final success = await auth.enableBiometricLogin(
+        email: auth.userProfile?.email ?? auth.user?.email ?? '',
+        password: password,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? '${auth.biometricLabel} sign-in enabled'
+                : 'Could not enable ${auth.biometricLabel}',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await auth.disableBiometricLogin();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${auth.biometricLabel} sign-in disabled')),
+    );
+  }
+
+  Future<String?> _promptForPassword(String biometricLabel) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Enable $biometricLabel'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Enter your password to save secure sign-in for $biometricLabel.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                prefixIcon: Icon(Icons.lock),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result?.trim().isEmpty ?? true ? null : result?.trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,6 +171,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                 child: const Text('Save Name'),
               ),
+              if (auth.biometricAvailable) ...[
+                const SizedBox(height: 16),
+                Card(
+                  child: SwitchListTile(
+                    secondary: const Icon(Icons.fingerprint),
+                    title: Text('${auth.biometricLabel} sign-in'),
+                    subtitle: Text(
+                      auth.biometricLoginEnabled
+                          ? 'Quick sign-in and app unlock'
+                          : 'Use ${auth.biometricLabel} instead of typing your password',
+                    ),
+                    value: auth.biometricLoginEnabled,
+                    onChanged: auth.isLoading
+                        ? null
+                        : (value) => _toggleBiometricLogin(auth, value),
+                  ),
+                ),
+              ],
               if (auth.isOwner) ...[
                 const SizedBox(height: 24),
                 const Divider(),

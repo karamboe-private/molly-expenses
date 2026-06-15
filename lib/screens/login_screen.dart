@@ -15,6 +15,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _promptedBiometricLogin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptBiometricLogin());
+  }
 
   @override
   void dispose() {
@@ -23,19 +30,97 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _maybePromptBiometricLogin() async {
+    if (_promptedBiometricLogin || !mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    await authProvider.refreshBiometricState();
+    if (!mounted ||
+        !authProvider.hasStoredBiometricCredentials ||
+        authProvider.isAuthenticated) {
+      return;
+    }
+
+    _promptedBiometricLogin = true;
+    await _handleBiometricLogin(showErrors: false);
+  }
+
+  Future<void> _offerEnableBiometric({
+    required String email,
+    required String password,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.biometricAvailable || authProvider.biometricLoginEnabled) {
+      return;
+    }
+
+    final label = authProvider.biometricLabel;
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Enable $label?'),
+        content: Text(
+          'Use $label to sign in quickly next time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Enable $label'),
+          ),
+        ],
+      ),
+    );
+
+    if (enable == true && mounted) {
+      await authProvider.enableBiometricLogin(
+        email: email,
+        password: password,
+      );
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
     final success = await authProvider.signIn(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
+      email: email,
+      password: password,
     );
 
-    if (!success && mounted) {
+    if (!mounted) return;
+
+    if (success) {
+      await _offerEnableBiometric(email: email, password: password);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(authProvider.errorMessage ?? 'Login failed'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  Future<void> _handleBiometricLogin({bool showErrors = true}) async {
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.signInWithBiometrics();
+
+    if (!mounted) return;
+
+    if (success) return;
+
+    if (showErrors && authProvider.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(authProvider.errorMessage ?? 'Login failed'),
+          content: Text(authProvider.errorMessage!),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -136,6 +221,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               )
                             : const Text('Sign In'),
                       ),
+                      if (authProvider.hasStoredBiometricCredentials) ...[
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed:
+                              authProvider.isLoading ? null : _handleBiometricLogin,
+                          icon: const Icon(Icons.fingerprint),
+                          label: Text('Sign in with ${authProvider.biometricLabel}'),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       const Divider(),
                       const SizedBox(height: 16),

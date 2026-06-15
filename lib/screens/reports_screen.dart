@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/constants.dart';
+import '../models/account.dart';
 import '../models/expense.dart';
 import '../providers/auth_provider.dart';
 import '../providers/expense_provider.dart';
@@ -139,60 +140,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  DateRangePickerWidget(
+                  _ReportFiltersAccordion(
                     startDate: _startDate,
                     endDate: _endDate,
-                    onChanged: (start, end) {
+                    category: _category,
+                    registeredByFilter: _registeredByFilter,
+                    isOwner: auth.isOwner,
+                    members: auth.members,
+                    onDateChanged: (start, end) {
                       setState(() {
                         _startDate = start;
                         _endDate = end;
                       });
                       _loadReport();
                     },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _category,
-                    decoration: const InputDecoration(
-                      labelText: 'Category',
-                      prefixIcon: Icon(Icons.category),
-                    ),
-                    items: ['All', ...AppConstants.expenseCategories]
-                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
+                    onCategoryChanged: (value) {
                       setState(() => _category = value);
                       _loadReport();
                     },
+                    onUserChanged: (value) {
+                      setState(() => _registeredByFilter = value);
+                      _loadReport();
+                    },
                   ),
-                  if (auth.isOwner) ...[
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String?>(
-                      initialValue: _registeredByFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Registered by',
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('All users'),
-                        ),
-                        ...auth.members.map(
-                          (m) => DropdownMenuItem(
-                            value: m.userId,
-                            child: Text(m.displayName),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setState(() => _registeredByFilter = value);
-                        _loadReport();
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -265,6 +236,115 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _ReportFiltersAccordion extends StatelessWidget {
+  final DateTime startDate;
+  final DateTime endDate;
+  final String category;
+  final String? registeredByFilter;
+  final bool isOwner;
+  final List<AccountMember> members;
+  final void Function(DateTime start, DateTime end) onDateChanged;
+  final void Function(String category) onCategoryChanged;
+  final void Function(String? userId) onUserChanged;
+
+  const _ReportFiltersAccordion({
+    required this.startDate,
+    required this.endDate,
+    required this.category,
+    required this.registeredByFilter,
+    required this.isOwner,
+    required this.members,
+    required this.onDateChanged,
+    required this.onCategoryChanged,
+    required this.onUserChanged,
+  });
+
+  String _userLabel() {
+    if (!isOwner || registeredByFilter == null) return 'All users';
+    for (final member in members) {
+      if (member.userId == registeredByFilter) {
+        return member.displayName;
+      }
+    }
+    return 'Selected user';
+  }
+
+  String _summary() {
+    final dateFormat = DateFormat.yMMMd();
+    final parts = [
+      '${dateFormat.format(startDate)} – ${dateFormat.format(endDate)}',
+      category,
+      if (isOwner) _userLabel(),
+    ];
+    return parts.join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        leading: const Icon(Icons.filter_list),
+        title: const Text('Filters'),
+        subtitle: Text(
+          _summary(),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white54,
+              ),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+        children: [
+          DateRangePickerWidget(
+            startDate: startDate,
+            endDate: endDate,
+            onChanged: onDateChanged,
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            initialValue: category,
+            decoration: const InputDecoration(
+              labelText: 'Category',
+              prefixIcon: Icon(Icons.category),
+            ),
+            items: ['All', ...AppConstants.expenseCategories]
+                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              onCategoryChanged(value);
+            },
+          ),
+          if (isOwner) ...[
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String?>(
+              initialValue: registeredByFilter,
+              decoration: const InputDecoration(
+                labelText: 'Registered by',
+                prefixIcon: Icon(Icons.person),
+              ),
+              items: [
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('All users'),
+                ),
+                ...members.map(
+                  (m) => DropdownMenuItem(
+                    value: m.userId,
+                    child: Text(m.displayName),
+                  ),
+                ),
+              ],
+              onChanged: onUserChanged,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
